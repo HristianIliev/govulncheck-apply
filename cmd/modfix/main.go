@@ -98,7 +98,22 @@ func remediate() error {
 		all = append(all, vulns...)
 	}
 
-	return report(os.Stdout, all)
+	if err := report(os.Stdout, all); err != nil {
+		return err
+	}
+
+	if nothingApplied(all) {
+		return errors.New("every fix broke `go mod tidy` and was rolled back; see the report above")
+	}
+
+	return nil
+}
+
+func nothingApplied(all []vuln) bool {
+	anyFixed := slices.ContainsFunc(all, func(v vuln) bool { return !v.stillReported })
+	anyRejected := slices.ContainsFunc(all, func(v vuln) bool { return v.rejected })
+
+	return anyRejected && !anyFixed
 }
 
 // remediateModule scans the module in dir with govulncheck and applies the
@@ -113,6 +128,7 @@ func remediateModule(dir, govulncheck, db string) ([]vuln, error) {
 	// every advisory any pass reported, described as the pass that first saw it
 	// did.
 	seen := map[string]vuln{}
+	rejected := map[string]string{}
 	before, err := modFiles(dir)
 	if err != nil {
 		return nil, err
@@ -127,9 +143,11 @@ func remediateModule(dir, govulncheck, db string) ([]vuln, error) {
 				seen[osv] = v
 			}
 		}
-		if err := apply(dir, fix); err != nil {
+		gaveUp, err := apply(dir, fix, rejected)
+		if err != nil {
 			return nil, err
 		}
+		maps.Copy(rejected, gaveUp)
 		after, err := modFiles(dir)
 		if err != nil {
 			return nil, err
@@ -139,7 +157,7 @@ func remediateModule(dir, govulncheck, db string) ([]vuln, error) {
 			if err != nil {
 				return nil, err
 			}
-			return classify(seen, reported, selected), nil
+			return classify(seen, reported, selected, rejected), nil
 		}
 		before = after
 	}
@@ -150,12 +168,13 @@ func remediateModule(dir, govulncheck, db string) ([]vuln, error) {
 // marked with whether the last pass reported it again and with the version of
 // the vulnerable module the run settled on. That, with the version that fixes
 // it, is everything the report needs to say what became of it.
-func classify(seen, remaining map[string]vuln, selected map[string]string) []vuln {
+func classify(seen, remaining map[string]vuln, selected, rejected map[string]string) []vuln {
 	var out []vuln
 	for _, osv := range slices.Sorted(maps.Keys(seen)) {
 		v := seen[osv]
 		_, v.stillReported = remaining[osv]
 		v.selected = selected[v.module]
+		_, v.rejected = rejected[v.module]
 		out = append(out, v)
 	}
 	return out
