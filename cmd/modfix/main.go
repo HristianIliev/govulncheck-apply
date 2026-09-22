@@ -47,6 +47,8 @@ const maxPasses = 5
 
 var dbURL = flag.String("db", "", "vulnerability database `url` for govulncheck to scan against, e.g. file:///tmp/db. Defaults to govulncheck's own default, https://vuln.go.dev")
 
+var bestEffort = flag.Bool("best-effort", false, "keep the fixes that resolved and exit 0 when others had to be rolled back.")
+
 func main() {
 	flag.Parse()
 	if err := remediate(); err != nil {
@@ -102,18 +104,19 @@ func remediate() error {
 		return err
 	}
 
-	if nothingApplied(all) {
-		return errors.New("every fix broke `go mod tidy` and was rolled back; see the report above")
+	if !anyRejected(all) {
+		return nil
+	}
+
+	if !*bestEffort {
+		return errors.New("some fixes broke `go mod tidy` and were rolled back; see the report above")
 	}
 
 	return nil
 }
 
-func nothingApplied(all []vuln) bool {
-	anyFixed := slices.ContainsFunc(all, func(v vuln) bool { return !v.stillReported })
-	anyRejected := slices.ContainsFunc(all, func(v vuln) bool { return v.rejected })
-
-	return anyRejected && !anyFixed
+func anyRejected(all []vuln) bool {
+	return slices.ContainsFunc(all, func(v vuln) bool { return v.rejected })
 }
 
 // remediateModule scans the module in dir with govulncheck and applies the

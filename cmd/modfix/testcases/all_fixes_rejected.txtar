@@ -2,10 +2,9 @@
 # nothing. The empty want_diff.txt asserts the rollback restored go.mod and
 # go.sum exactly, leaving no commit for a pull request to carry.
 #
-# So the run exits non-zero even though it handled the failure cleanly: a zero
-# exit here would have the caller find nothing to commit, discard the report,
-# and say nothing to anyone, leaving the advisory unremediated and unmentioned.
-# The non-zero exit is what has NDR mail the repository's owners instead.
+# So the run exits non-zero even though it handled the failure cleanly: a fix
+# that had to be rolled back fails the run unless -best-effort says otherwise,
+# and the non-zero exit is what has NDR mail the repository's owners.
 
 exit: 1
 -- go.mod --

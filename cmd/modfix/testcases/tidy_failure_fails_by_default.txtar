@@ -1,14 +1,13 @@
-# One fix resolves and one does not, under -best-effort. The run keeps the x/text
-# upgrade, rolls the jwt-go upgrade back so the module still tidies, and reports
-# the one it gave up on as needing manual attention. It exits 0: a PR carrying
-# the fix that landed is worth more than no PR at all, so long as the
-# description says what is left.
+# The same run as tidy_failure_rolls_back_one_fix, without -best-effort: a fix
+# that had to be rolled back fails the run by default.
 #
-# Without the flag the same run exits 1; tidy_failure_fails_by_default covers
-# that, and the two cases assert the same diff, because what the flag governs is
-# the exit status rather than what is applied.
+# The diff is identical to that case. The default governs the exit status, not
+# what is applied -- the x/text upgrade is still kept, and what is left on disk
+# is a module that tidies and builds. So a caller that commits only on success
+# leaves a partial remediation behind rather than carrying it unnoticed, and one
+# that wants it asks for it.
 
-args: -best-effort
+exit: 1
 -- go.mod --
 module example.com/rollback
 
