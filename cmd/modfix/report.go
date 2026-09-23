@@ -22,9 +22,7 @@ import (
 
 const stdlib = "stdlib"
 
-type vulnerabilities []vuln
-
-type metrics struct {
+type toolExecutionMetrics struct {
 	Tool                     string `json:"tool"`
 	VulnerabilitiesFound     int    `json:"vulnerabilitiesFound"`
 	VulnerabilitiesFixed     int    `json:"vulnerabilitiesFixed"`
@@ -32,9 +30,9 @@ type metrics struct {
 	VulnerabilitiesStuck     int    `json:"vulnerabilitiesStuck"`
 }
 
-func (vs vulnerabilities) calculateMetrics() metrics {
-	m := metrics{Tool: "govulncheck-apply", VulnerabilitiesFound: len(vs)}
-	for _, v := range vs {
+func calculateMetrics(all []vuln) toolExecutionMetrics {
+	m := toolExecutionMetrics{Tool: "govulncheck-apply", VulnerabilitiesFound: len(all)}
+	for _, v := range all {
 		switch {
 		case !v.stillReported:
 			m.VulnerabilitiesFixed++
@@ -85,22 +83,22 @@ func report(w io.Writer, all []vuln) error {
 
 // heading counts what the run found against what it left, so that a reader sees
 // at a glance whether anything is outstanding.
-func heading(all vulnerabilities) string {
-	metrics := all.calculateMetrics()
+func heading(all []vuln) string {
+	m := calculateMetrics(all)
 
-	said := []string{fmt.Sprintf("this PR fixes %d", metrics.VulnerabilitiesFixed)}
+	said := []string{fmt.Sprintf("this PR fixes %d", m.VulnerabilitiesFixed)}
 
-	if metrics.VulnerabilitiesUnfixable > 0 {
+	if m.VulnerabilitiesUnfixable > 0 {
 		said = append(said, fmt.Sprintf("%d %s not have a fix ready yet",
-			metrics.VulnerabilitiesUnfixable, agree(metrics.VulnerabilitiesUnfixable, "does", "do")))
+			m.VulnerabilitiesUnfixable, agree(m.VulnerabilitiesUnfixable, "does", "do")))
 	}
 
-	if metrics.VulnerabilitiesStuck > 0 {
-		said = append(said, fmt.Sprintf("%d unable to fix", metrics.VulnerabilitiesStuck))
+	if m.VulnerabilitiesStuck > 0 {
+		said = append(said, fmt.Sprintf("%d unable to fix", m.VulnerabilitiesStuck))
 	}
 
 	return fmt.Sprintf("govulncheck found %d %s; %s:",
-		metrics.VulnerabilitiesFound, agree(metrics.VulnerabilitiesFound, "vulnerability", "vulnerabilities"),
+		m.VulnerabilitiesFound, agree(m.VulnerabilitiesFound, "vulnerability", "vulnerabilities"),
 		strings.Join(said, ", "))
 }
 

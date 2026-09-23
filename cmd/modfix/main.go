@@ -93,7 +93,7 @@ func remediate() error {
 
 	// Search for an apply fixes. Record fixes as we go, so that we can report
 	// them to the user.
-	var all vulnerabilities
+	var all []vuln
 
 	for i, dir := range dirs {
 		fmt.Fprintf(os.Stderr, "Working on module %q (%d of %d)\n", filepath.ToSlash(dir), i+1, len(dirs))
@@ -109,9 +109,7 @@ func remediate() error {
 	}
 
 	if *metricsPath != "" {
-		metrics := all.calculateMetrics()
-
-		data, err := json.Marshal(metrics)
+		data, err := json.Marshal(calculateMetrics(all))
 		if err != nil {
 			return err
 		}
