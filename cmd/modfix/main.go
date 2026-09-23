@@ -24,10 +24,14 @@
 // What it found and what became of each advisory is printed to stdout as one
 // markdown table, ready to carry into a pull request description. Nothing is
 // printed when there was nothing to report.
+//
+// The same counts are written as JSON to the file named by -metrics, for a
+// caller that records what a run remediated rather than reading it.
 package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -46,6 +50,8 @@ import (
 const maxPasses = 5
 
 var dbURL = flag.String("db", "", "vulnerability database `url` for govulncheck to scan against, e.g. file:///tmp/db. Defaults to govulncheck's own default, https://vuln.go.dev")
+
+var metricsPath = flag.String("metrics", "", "`path` to a file where to write the run's vulnerability counts.")
 
 func main() {
 	flag.Parse()
@@ -87,7 +93,7 @@ func remediate() error {
 
 	// Search for an apply fixes. Record fixes as we go, so that we can report
 	// them to the user.
-	var all []vuln
+	var all vulnerabilities
 
 	for i, dir := range dirs {
 		fmt.Fprintf(os.Stderr, "Working on module %q (%d of %d)\n", filepath.ToSlash(dir), i+1, len(dirs))
@@ -98,7 +104,22 @@ func remediate() error {
 		all = append(all, vulns...)
 	}
 
-	return report(os.Stdout, all)
+	if err := report(os.Stdout, all); err != nil {
+		return err
+	}
+
+	if *metricsPath != "" {
+		metrics := all.calculateMetrics()
+
+		data, err := json.Marshal(metrics)
+		if err != nil {
+			return err
+		}
+
+		return os.WriteFile(*metricsPath, append(data, '\n'), 0o644)
+	}
+
+	return nil
 }
 
 // remediateModule scans the module in dir with govulncheck and applies the
