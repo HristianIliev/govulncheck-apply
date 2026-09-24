@@ -103,6 +103,17 @@ func TestReport(t *testing.T) {
 				"    example.com/c v1.0.0 -> v1.1.0 (selected v1.2.0, fix did not take)\n",
 		},
 		{
+			name: "an advisory listed in govulncheck.ignore",
+			vulns: []vuln{{
+				osv: "GO-6", url: "https://pkg.go.dev/vuln/GO-6",
+				module: "example.com/d", found: "v1.0.0", fixedIn: "v1.1.0",
+				stillReported: true, ignored: true,
+			}},
+			want: "govulncheck found 1 vulnerability; this PR fixes 0, 1 ignored:\n\n" +
+				"**[GO-6](https://pkg.go.dev/vuln/GO-6)**\n\n" +
+				"    example.com/d v1.0.0 (ignored)\n",
+		},
+		{
 			// Each module's outcome is reported on its own, so two modules
 			// reporting the same advisory produce an entry each.
 			name:  "an entry per module reporting it",

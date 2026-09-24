@@ -94,7 +94,7 @@ var operatingSystems = []string{"linux", "windows", "darwin"}
 // An operating system the module does not target is passed over rather than
 // failing it. A module passed over everywhere is an error: no scan read it, so
 // nothing can call it clean.
-func scan(dir, govulncheck, db string) (fixes, map[string]vuln, error) {
+func scan(dir, govulncheck, db string, ignore map[string]bool) (fixes, map[string]vuln, error) {
 	// Scanning at package rather than symbol granularity, because a fix is worth
 	// applying whether or not the vulnerable function is called, and because the
 	// symbol granularity is the only one that type-checks the module. Type
@@ -174,7 +174,7 @@ func scan(dir, govulncheck, db string) (fixes, map[string]vuln, error) {
 	if !scanned && len(skipped) > 0 {
 		return fixes{}, nil, fmt.Errorf("build constraints exclude the packages the module needs under %s, and no other operating system found one to scan", strings.Join(skipped, ", "))
 	}
-	return parse(bytes.NewReader(streams))
+	return parse(bytes.NewReader(streams), ignore)
 }
 
 // excludedByBuildConstraints reports whether every error govulncheck raised
@@ -229,7 +229,7 @@ func noPackages(dir, goos string) (bool, error) {
 }
 
 // parse reads a `govulncheck -json` stream.
-func parse(r io.Reader) (fixes, map[string]vuln, error) {
+func parse(r io.Reader, ignore map[string]bool) (fixes, map[string]vuln, error) {
 	dec := json.NewDecoder(r)
 	fix := fixes{modules: map[string]string{}}
 	reported := map[string]*vuln{}
@@ -254,7 +254,7 @@ func parse(r io.Reader) (fixes, map[string]vuln, error) {
 		vulnerable := f.Trace[0]
 		v := reported[f.OSV]
 		if v == nil {
-			v = &vuln{osv: f.OSV, module: vulnerable.Module, found: vulnerable.Version}
+			v = &vuln{osv: f.OSV, module: vulnerable.Module, found: vulnerable.Version, ignored: ignore[f.OSV]}
 			reported[f.OSV] = v
 		}
 		if f.FixedVersion != "" {
@@ -265,7 +265,7 @@ func parse(r io.Reader) (fixes, map[string]vuln, error) {
 		if v.pkg == "" {
 			v.pkg = vulnerable.Package
 		}
-		if vulnerable.Module == "" || f.FixedVersion == "" {
+		if vulnerable.Module == "" || f.FixedVersion == "" || v.ignored {
 			continue
 		}
 		// A module can have several vulns with different fixes; keep the

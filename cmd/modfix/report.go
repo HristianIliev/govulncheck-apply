@@ -33,6 +33,7 @@ type vuln struct {
 	selected      string // the version the run left selected, empty if unchanged
 	fixedIn       string // the version that fixes it, empty if none is published
 	stillReported bool   // whether the last pass reported it again
+	ignored       bool   // whether its id is listed in govulncheck.ignore
 }
 
 // The two ways a vulnerability can be left behind: the database publishes no
@@ -60,9 +61,11 @@ func report(w io.Writer, all []vuln) error {
 // heading counts what the run found against what it left, so that a reader sees
 // at a glance whether anything is outstanding.
 func heading(all []vuln) string {
-	fixed, unfixable, stuck := 0, 0, 0
+	fixed, unfixable, stuck, ignored := 0, 0, 0, 0
 	for _, v := range all {
 		switch {
+		case v.ignored:
+			ignored++
 		case !v.stillReported:
 			fixed++
 		case v.fixedIn == "":
@@ -77,6 +80,9 @@ func heading(all []vuln) string {
 	}
 	if stuck > 0 {
 		said = append(said, fmt.Sprintf("%d unable to fix", stuck))
+	}
+	if ignored > 0 {
+		said = append(said, fmt.Sprintf("%d ignored", ignored))
 	}
 	return fmt.Sprintf("govulncheck found %d %s; %s:",
 		len(all), agree(len(all), "vulnerability", "vulnerabilities"), strings.Join(said, ", "))
@@ -107,6 +113,10 @@ func entry(v vuln) string {
 // the run left it.
 func versions(v vuln) string {
 	module, found := vulnerableModule(v), toolchainName(v.module, v.found)
+	if v.ignored {
+		// No fix was attempted, so nothing is named to have moved to.
+		return fmt.Sprintf("%s %s (ignored)", module, found)
+	}
 	var noted []string
 	// The version that fixes an advisory is a minimum, so minimal version
 	// selection can land above it, and naming only the minimum next to a diff

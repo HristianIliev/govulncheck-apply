@@ -79,12 +79,43 @@ func TestParse(t *testing.T) {
 		},
 	}
 
-	fix, reported, err := parse(strings.NewReader(stream))
+	fix, reported, err := parse(strings.NewReader(stream), nil)
 	if err != nil {
 		t.Fatalf("parse(%q) failed: %v", stream, err)
 	}
 	// Compared whole: nothing else may reach fix.modules, and the stdlib fix is
 	// the thing that could wrongly land there.
+	if diff := cmp.Diff(fix, wantFix, unexported); diff != "" {
+		t.Errorf("parse() fixes differ (-got +want):\n%s", diff)
+	}
+	if diff := cmp.Diff(reported, wantReported, unexported); diff != "" {
+		t.Errorf("parse() reported differ (-got +want):\n%s", diff)
+	}
+}
+
+// TestParseIgnore covers an advisory whose id is listed in govulncheck.ignore: it
+// is still reported, so a reader can see it was found and set aside, but it
+// never raises the module it names.
+func TestParseIgnore(t *testing.T) {
+	stream := `
+{"osv": {"id": "GO-TEST-0001", "summary": "Panic in x/text", "database_specific": {"url": "https://pkg.go.dev/vuln/GO-TEST-0001"}}}
+{"finding": {"osv": "GO-TEST-0001", "fixed_version": "v0.3.7", "trace": [{"module": "golang.org/x/text", "version": "v0.3.5"}]}}
+{"finding": {"osv": "GO-TEST-0002", "fixed_version": "v1.1.0", "trace": [{"module": "example.com/b", "version": "v1.0.0"}]}}
+`
+	wantFix := fixes{modules: map[string]string{"example.com/b": "v1.1.0"}}
+	wantReported := map[string]vuln{
+		"GO-TEST-0001": {
+			osv: "GO-TEST-0001", url: "https://pkg.go.dev/vuln/GO-TEST-0001",
+			summary: "Panic in x/text", module: "golang.org/x/text",
+			found: "v0.3.5", fixedIn: "v0.3.7", ignored: true,
+		},
+		"GO-TEST-0002": {osv: "GO-TEST-0002", module: "example.com/b", found: "v1.0.0", fixedIn: "v1.1.0"},
+	}
+
+	fix, reported, err := parse(strings.NewReader(stream), map[string]bool{"GO-TEST-0001": true})
+	if err != nil {
+		t.Fatalf("parse(%q) failed: %v", stream, err)
+	}
 	if diff := cmp.Diff(fix, wantFix, unexported); diff != "" {
 		t.Errorf("parse() fixes differ (-got +want):\n%s", diff)
 	}

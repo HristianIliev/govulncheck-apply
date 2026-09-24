@@ -65,6 +65,11 @@ func remediate() error {
 		return nil
 	}
 
+	ignore, err := readIgnore("govulncheck.ignore")
+	if err != nil {
+		return err
+	}
+
 	// We install govulncheck ourselves so that we can control the version. It
 	// has to be built at a version >= the Go mod directive it tests. Since we
 	// bump the Go directive, the govulncheck version that may already exist on
@@ -91,7 +96,7 @@ func remediate() error {
 
 	for i, dir := range dirs {
 		fmt.Fprintf(os.Stderr, "Working on module %q (%d of %d)\n", filepath.ToSlash(dir), i+1, len(dirs))
-		vulns, err := remediateModule(dir, govulncheck, *dbURL)
+		vulns, err := remediateModule(dir, govulncheck, *dbURL, ignore)
 		if err != nil {
 			return fmt.Errorf("%s: %w", filepath.ToSlash(dir), err)
 		}
@@ -108,7 +113,7 @@ func remediate() error {
 // A module it cannot scan, or that is still changing after maxPasses, is
 // returned as an error: the run ends there, so no report claims a repository
 // was remediated when part of it was never read.
-func remediateModule(dir, govulncheck, db string) ([]vuln, error) {
+func remediateModule(dir, govulncheck, db string, ignore map[string]bool) ([]vuln, error) {
 	// A fix can introduce a vulnerability of its own, so the report covers
 	// every advisory any pass reported, described as the pass that first saw it
 	// did.
@@ -118,7 +123,7 @@ func remediateModule(dir, govulncheck, db string) ([]vuln, error) {
 		return nil, err
 	}
 	for range maxPasses {
-		fix, reported, err := scan(dir, govulncheck, db)
+		fix, reported, err := scan(dir, govulncheck, db, ignore)
 		if err != nil {
 			return nil, err
 		}
